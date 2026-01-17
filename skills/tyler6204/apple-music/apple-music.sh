@@ -696,8 +696,24 @@ cmd_player() {
         vol|volume)
             if [[ $# -gt 0 ]]; then
                 local vol="$1"
+                # Validate and clamp volume to 0-100
+                if ! [[ "$vol" =~ ^[0-9]+$ ]]; then
+                    error "Volume must be a number between 0 and 100"
+                fi
+                if [[ $vol -lt 0 ]]; then
+                    vol=0
+                elif [[ $vol -gt 100 ]]; then
+                    vol=100
+                fi
+                
+                # Set Apple Music app volume (existing behavior)
                 osascript -e "tell application \"Music\" to set sound volume to $vol"
-                echo -e "${CYAN}🔊${NC} Volume set to $vol"
+                
+                # Set macOS system output volume and unmute
+                osascript -e "set volume output volume $vol"
+                osascript -e "set volume without output muted"
+                
+                echo -e "${CYAN}🔊${NC} Volume set to $vol (app + system)"
             else
                 local vol
                 vol=$(osascript -e 'tell application "Music" to get sound volume')
