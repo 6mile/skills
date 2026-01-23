@@ -1,0 +1,11 @@
+{
+  "owner": "matrixy",
+  "slug": "audio-reply-skill",
+  "displayName": "Audio Reply",
+  "latest": {
+    "version": "0.1.0",
+    "publishedAt": 1769182470231,
+    "commit": null
+  },
+  "history": []
+}
