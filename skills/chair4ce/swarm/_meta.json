@@ -1,0 +1,11 @@
+{
+  "owner": "chair4ce",
+  "slug": "swarm",
+  "displayName": "Swarm - Parallel Task Execution",
+  "latest": {
+    "version": "0.2.0",
+    "publishedAt": 1769385856753,
+    "commit": null
+  },
+  "history": []
+}
