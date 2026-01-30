@@ -21,7 +21,7 @@ channels:
 
 # Smart Follow-ups Skill
 
-Generate contextual follow-up suggestions for Clawdbot conversations.
+Generate contextual follow-up suggestions for OpenClaw conversations.
 
 ## How to Trigger
 
@@ -34,7 +34,7 @@ Say any of these to get follow-up suggestions:
 | `suggestions` | "any suggestions?" |
 | `what next` | "what should I ask next?" |
 
-> **Note:** This is a keyword the agent recognizes, not a registered `/slash` command. Clawdbot skills are guidance docs that tell the agent how to respond.
+> **Note:** This is a keyword the agent recognizes, not a registered `/slash` command. OpenClaw skills are guidance docs that tell the agent how to respond.
 
 ## Usage
 
@@ -68,7 +68,7 @@ Each generation produces 3 suggestions:
 
 ## Authentication
 
-**Default:** Uses Clawdbot's existing auth — same login and model as your current chat.
+**Default:** Uses OpenClaw's existing auth — same login and model as your current chat.
 
 **Optional providers:**
 - `openrouter` — Requires `OPENROUTER_API_KEY`
@@ -81,7 +81,7 @@ Each generation produces 3 suggestions:
   "skills": {
     "smart-followups": {
       "enabled": true,
-      "provider": "clawdbot",
+      "provider": "openclaw",
       "model": null
     }
   }
@@ -90,9 +90,9 @@ Each generation produces 3 suggestions:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `provider` | `"clawdbot"` | Auth provider: `clawdbot`, `openrouter`, `anthropic` |
+| `provider` | `"openclaw"` | Auth provider: `openclaw`, `openrouter`, `anthropic` |
 | `model` | `null` | Model override (null = inherit from session) |
-| `apiKey` | — | API key for non-clawdbot providers |
+| `apiKey` | — | API key for non-openclaw providers |
 
 ## Channel Support
 
@@ -114,10 +114,10 @@ See [CHANNELS.md](CHANNELS.md) for detailed channel documentation.
 
 1. User types `/followups`
 2. Handler captures recent conversation context
-3. Clawdbot generates 3 contextual questions (using current model/auth)
+3. OpenClaw generates 3 contextual questions (using current model/auth)
 4. Formatted as buttons or text based on channel
 5. User clicks button or replies with number
-6. Clawdbot answers that question
+6. OpenClaw answers that question
 
 ## Files
 

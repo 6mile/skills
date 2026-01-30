@@ -32,7 +32,7 @@ Found a bug? Help us fix it!
    - Clear, descriptive title
    - Steps to reproduce
    - Expected vs actual behavior
-   - Environment details (Node version, OS, Clawdbot version)
+   - Environment details (Node version, OS, OpenClaw version)
    - Sample input/output if applicable
 
 **Example**:
@@ -67,7 +67,7 @@ Want to add a new messaging platform?
 2. Add channel-specific formatting if needed
 3. Create examples in `examples.md`
 4. Test with real account on that platform
-5. Update `package.json` clawdbot.channels
+5. Update `package.json` openclaw.channels
 6. Submit PR with screenshots/recordings
 
 ### Improving Documentation
@@ -94,8 +94,8 @@ Documentation improvements are always welcome!
 
 1. **Fork and clone**:
    ```bash
-   git clone https://github.com/your-username/clawdbot-smart-followups.git
-   cd clawdbot-smart-followups
+   git clone https://github.com/your-username/openclaw-smart-followups.git
+   cd openclaw-smart-followups
    ```
 
 2. **Install dependencies**:
@@ -177,7 +177,7 @@ Documentation improvements are always welcome!
 smart-followups/
 ├── cli/                  # CLI tool (standalone)
 │   └── followups-cli.js
-├── handler.js            # Clawdbot integration
+├── handler.js            # OpenClaw integration
 ├── test/                 # Tests (future)
 │   ├── cli.test.js
 │   └── handler.test.js

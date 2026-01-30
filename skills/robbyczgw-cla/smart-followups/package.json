@@ -1,7 +1,7 @@
 {
-  "name": "@clawdbot/smart-followups",
+  "name": "@openclaw/smart-followups",
   "version": "1.0.4",
-  "description": "Clawdbot skill: Say 'followups' to get 3 contextual suggestions (Quick, Deep Dive, Related) as buttons or text",
+  "description": "OpenClaw skill: Say 'followups' to get 3 contextual suggestions (Quick, Deep Dive, Related) as buttons or text",
   "main": "handler.js",
   "bin": {
     "followups-cli": "./cli/followups-cli.js"
@@ -11,7 +11,7 @@
     "demo": "echo '[{\"user\":\"What is Docker?\",\"assistant\":\"Docker is a containerization platform.\"}]' | node cli/followups-cli.js --mode text"
   },
   "keywords": [
-    "clawdbot",
+    "openclaw",
     "skill",
     "follow-up",
     "suggestions",
@@ -31,11 +31,11 @@
     "type": "git",
     "url": "https://github.com/robbyczgw-cla/smart-followups.git"
   },
-  "homepage": "https://clawdhub.com/skills/smart-followups",
+  "homepage": "https://clawhub.ai/skills/smart-followups",
   "bugs": {
     "url": "https://github.com/robbyczgw-cla/smart-followups/issues"
   },
-  "clawdbot": {
+  "openclaw": {
     "skill": true,
     "handler": "handler.js",
     "cli": "cli/followups-cli.js",
@@ -58,8 +58,8 @@
     "config": {
       "provider": {
         "type": "string",
-        "default": "clawdbot",
-        "enum": ["clawdbot", "openrouter", "anthropic"],
+        "default": "openclaw",
+        "enum": ["openclaw", "openrouter", "anthropic"],
         "description": "Authentication provider"
       },
       "model": {

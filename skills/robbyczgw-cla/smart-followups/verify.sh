@@ -159,7 +159,7 @@ if [ $ERRORS -eq 0 ] && [ $WARNINGS -eq 0 ]; then
     echo ""
     echo "Next steps:"
     echo "  1. Test CLI: ./test.sh"
-    echo "  2. Integrate with Clawdbot (see SKILL.md)"
+    echo "  2. Integrate with OpenClaw (see SKILL.md)"
     echo "  3. Test on Telegram"
     exit 0
 elif [ $ERRORS -eq 0 ]; then

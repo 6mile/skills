@@ -3,7 +3,7 @@
 > This document captures the development history, design decisions, and architecture of the Smart Follow-ups skill.
 
 **Created:** January 20, 2026  
-**Author:** Cami (Clawdbot) with Robby  
+**Author:** Cami (OpenClaw) with Robby  
 **Status:** v1.0.0 - Ready for testing
 
 ---
@@ -14,7 +14,7 @@
 
 The Smart Follow-ups skill was inspired by [Chameleon AI Chat](https://github.com/robbyczgw-cla/Chameleon-AI-Chat), Robby's open-source AI chat application. Chameleon features a "Smart Follow-up Suggestions" system that generates contextual follow-up questions after every AI response.
 
-Robby wanted to bring this feature to Clawdbot as a standalone skill that could work across multiple messaging channels.
+Robby wanted to bring this feature to OpenClaw as a standalone skill that could work across multiple messaging channels.
 
 ### Initial Specification (from Chameleon)
 
@@ -39,15 +39,15 @@ Chameleon's original implementation:
 - Faster to scan and decide
 - Each suggestion is more focused/high-quality
 
-#### 2. Clawdbot Native Auth as Default
+#### 2. OpenClaw Native Auth as Default
 
-**Decision:** Use Clawdbot's existing authentication by default, not separate API keys
+**Decision:** Use OpenClaw's existing authentication by default, not separate API keys
 
 **Robby's requirement:**
 > "Follow ups skill should use the exact same login and model and authentication... we use as auth anthropic Claude CLI token NOT Openrouter"
 
 **Implementation:**
-- Default `provider: "clawdbot"` uses current session's model and auth
+- Default `provider: "openclaw"` uses current session's model and auth
 - OpenRouter and direct Anthropic are optional fallbacks
 - No separate API key required for default mode
 
@@ -80,7 +80,7 @@ Chameleon's original implementation:
 
 ### Handler-Based Integration
 
-The skill works by returning a prompt to Clawdbot's agent system:
+The skill works by returning a prompt to OpenClaw's agent system:
 
 ```
 User types /followups
@@ -89,7 +89,7 @@ Handler receives command
     ↓
 Handler returns agent-prompt type response
     ↓
-Clawdbot agent generates follow-ups using current model/auth
+OpenClaw agent generates follow-ups using current model/auth
     ↓
 Handler transforms response to buttons/text
     ↓
@@ -98,9 +98,9 @@ Sent to user
 
 **Why this approach:**
 - No separate API calls from the skill
-- Uses Clawdbot's existing infrastructure
+- Uses OpenClaw's existing infrastructure
 - Inherits session model and authentication
-- Consistent with Clawdbot's architecture
+- Consistent with OpenClaw's architecture
 
 ### CLI Tool (Fallback/Testing)
 
@@ -155,11 +155,11 @@ readme.md → 302 redirect → dealsbe.com (spam)
 
 | File | Purpose | Audience |
 |------|---------|----------|
-| `README.md` | Public documentation | Users, ClawdHub |
-| `SKILL.md` | Clawdbot skill manifest | Clawdbot |
+| `README.md` | Public documentation | Users, ClawHub |
+| `SKILL.md` | OpenClaw skill manifest | OpenClaw |
 | `FAQ.md` | Common questions | Users |
 | `INTERNAL.md` | This file - dev notes | Developers |
-| `handler.js` | Command handler | Clawdbot |
+| `handler.js` | Command handler | OpenClaw |
 | `cli/followups-cli.js` | Standalone CLI | Power users |
 | `CHANGELOG.md` | Version history | Users, devs |
 | `CONTRIBUTING.md` | Contribution guide | Contributors |
@@ -178,7 +178,7 @@ readme.md → 302 redirect → dealsbe.com (spam)
 ### Medium-term
 - [ ] Support for follow-up chains (click suggestion → new suggestions)
 - [ ] Category customization (add/remove categories)
-- [ ] Integration with Clawdbot memory (suggest based on past conversations)
+- [ ] Integration with OpenClaw memory (suggest based on past conversations)
 
 ### Long-term
 - [ ] Multi-language support
@@ -195,7 +195,7 @@ readme.md → 302 redirect → dealsbe.com (spam)
 - [x] CLI text mode formatting correct
 - [x] OpenRouter API integration works
 - [x] Model ID format correct for OpenRouter
-- [ ] Handler integration with Clawdbot
+- [ ] Handler integration with OpenClaw
 - [ ] `/followups` command registered
 - [ ] Telegram buttons clickable and functional
 - [ ] Signal/iMessage text fallback works
@@ -207,7 +207,7 @@ readme.md → 302 redirect → dealsbe.com (spam)
 | Model | Cost per Generation | Notes |
 |-------|---------------------|-------|
 | Claude 3 Haiku | ~$0.0002 | Cheapest, good quality |
-| Claude Sonnet 4.5 | ~$0.003 | Default for Clawdbot |
+| Claude Sonnet 4.5 | ~$0.003 | Default for OpenClaw |
 | Claude Opus 4.5 | ~$0.015 | Highest quality |
 
 **Recommendation:** For cost-conscious users, configure OpenRouter with Haiku specifically for follow-ups while keeping main chat on Sonnet/Opus.
@@ -232,7 +232,7 @@ readme.md → 302 redirect → dealsbe.com (spam)
 ### v1.0.0 (2026-01-20)
 - Initial release
 - 3 suggestions (Quick, Deep, Related)
-- Clawdbot native auth as default
+- OpenClaw native auth as default
 - OpenRouter and Anthropic as optional providers
 - CLI tool for standalone use
 - Multi-channel support (buttons + text fallback)

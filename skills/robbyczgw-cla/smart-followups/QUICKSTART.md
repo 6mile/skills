@@ -87,14 +87,14 @@ Reply with a number (1-3) to ask that question.
 }
 ```
 
-## 6️⃣ Integrate with Clawdbot
+## 6️⃣ Integrate with OpenClaw
 
 See [SKILL.md](./SKILL.md) for full integration guide.
 
 **TL;DR**:
 
-1. Copy this folder to Clawdbot's skills directory
-2. Add to `clawdbot.config.json`:
+1. Copy this folder to OpenClaw's skills directory
+2. Add to `openclaw.config.json`:
    ```json
    {
      "skills": {
@@ -105,7 +105,7 @@ See [SKILL.md](./SKILL.md) for full integration guide.
      }
    }
    ```
-3. Restart Clawdbot
+3. Restart OpenClaw
 4. Use `/followups` in any conversation
 
 ## 🐛 Troubleshooting
@@ -137,14 +137,14 @@ DEBUG=* node cli/followups-cli.js ...
 
 - Read [README.md](./README.md) for feature overview
 - Check [examples.md](./examples.md) for channel-specific outputs
-- Review [SKILL.md](./SKILL.md) for Clawdbot integration
+- Review [SKILL.md](./SKILL.md) for OpenClaw integration
 - Explore [INTERNAL.md](./INTERNAL.md) for architecture details
 
 ## 💡 Tips
 
 1. **Use Haiku**: Default model, fastest and cheapest
 2. **Manual trigger**: Start with `/followups` command, not auto-mode
-3. **Test locally**: Verify CLI works before integrating with Clawdbot
+3. **Test locally**: Verify CLI works before integrating with OpenClaw
 4. **Monitor costs**: ~$0.0001 per generation with Haiku
 
 ## ✅ Checklist
@@ -154,7 +154,7 @@ DEBUG=* node cli/followups-cli.js ...
 - [ ] `npm install` completed
 - [ ] `./test.sh` runs successfully
 - [ ] CLI produces valid JSON/text output
-- [ ] Ready to integrate with Clawdbot!
+- [ ] Ready to integrate with OpenClaw!
 
 ---
 

@@ -4,11 +4,11 @@
  * Smart Follow-up Suggestions CLI
  * Generates contextual follow-up questions based on conversation history
  * 
- * Supports both direct Anthropic API and OpenRouter (Clawdbot's default)
+ * Supports both direct Anthropic API and OpenRouter (OpenClaw's default)
  */
 
 // Configuration
-const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5'; // Same as Clawdbot primary model (OpenRouter format)
+const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5'; // Same as OpenClaw primary model (OpenRouter format)
 const MAX_TOKENS = 1024;
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
@@ -106,7 +106,7 @@ async function generateFollowups(exchanges, options = {}) {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://clawdbot.com',
+          'HTTP-Referer': 'https://openclaw.com',
           'X-Title': 'Smart Follow-ups Skill'
         },
         body: JSON.stringify({
@@ -357,7 +357,7 @@ EXAMPLES:
   followups-cli --model claude-sonnet-4 --context context.json
 
 ENVIRONMENT:
-  OPENROUTER_API_KEY   Recommended: Your OpenRouter API key (Clawdbot default)
+  OPENROUTER_API_KEY   Recommended: Your OpenRouter API key (OpenClaw default)
   ANTHROPIC_API_KEY    Alternative: Direct Anthropic API key
 `);
 }
