@@ -1,0 +1,11 @@
+{
+  "owner": "mrlynn",
+  "slug": "mongodb-atlas-admin",
+  "displayName": "MongoDB Atlas Admin",
+  "latest": {
+    "version": "1.0.0",
+    "publishedAt": 1769775264873,
+    "commit": null
+  },
+  "history": []
+}
