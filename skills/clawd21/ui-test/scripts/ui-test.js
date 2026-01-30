@@ -76,6 +76,8 @@ function update(name, data) {
   if (data.url) test.url = data.url;
   if (data.steps) test.steps = data.steps;
   if (data.addStep) test.steps.push(data.addStep);
+  if (data.description !== undefined) test.description = data.description;
+  if (data.successCriteria !== undefined) test.successCriteria = data.successCriteria;
   test.updatedAt = new Date().toISOString();
 
   saveTest(test);
@@ -379,6 +381,20 @@ switch (command) {
       console.error('Steps must be a JSON array: ["step1", "step2", ...]');
       process.exit(1);
     }
+    break;
+  }
+  case 'set-desc': {
+    const name = args[1];
+    const desc = args.slice(2).join(' ');
+    if (!name || !desc) { console.error('Usage: ui-test.js set-desc <name> <description>'); process.exit(1); }
+    update(name, { description: desc });
+    break;
+  }
+  case 'set-success': {
+    const name = args[1];
+    const sc = args.slice(2).join(' ');
+    if (!name || !sc) { console.error('Usage: ui-test.js set-success <name> <success criteria>'); process.exit(1); }
+    update(name, { successCriteria: sc });
     break;
   }
   case 'get':

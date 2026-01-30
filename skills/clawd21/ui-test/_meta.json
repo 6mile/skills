@@ -3,9 +3,15 @@
   "slug": "ui-test",
   "displayName": "UI Test",
   "latest": {
-    "version": "1.2.1",
-    "publishedAt": 1769726246725,
-    "commit": "https://github.com/clawdbot/skills/commit/3572dee022022096ae4fc11d55c661a08dd7c929"
+    "version": "1.4.0",
+    "publishedAt": 1769756815489,
+    "commit": null
   },
-  "history": []
+  "history": [
+    {
+      "version": "1.2.1",
+      "publishedAt": 1769726246725,
+      "commit": "https://github.com/clawdbot/skills/commit/3572dee022022096ae4fc11d55c661a08dd7c929"
+    }
+  ]
 }

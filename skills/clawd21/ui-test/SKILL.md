@@ -1,12 +1,12 @@
 ---
 name: ui-test
-description: Plain English E2E UI testing. Describe tests in natural language, agent executes via browser tool, then exports real Playwright test scripts for CI/CD. Use when asked to create UI tests, test a website, or generate Playwright scripts.
+description: Describe your UI tests in plain English. The agent runs them in a real browser, screenshots every step, and sends you a walkthrough video with a pass/fail report — no selectors or code needed.
 metadata: {"clawdbot":{"emoji":"🧪"}}
 ---
 
 # UI Test — Plain English E2E Testing (🧪)
 
-Describe your UI tests in plain English. The agent figures out how to find buttons, navigate the app flow, and execute each step — no selectors or code needed. It screenshots every major step, stitches them into a walkthrough video, and DMs you the result with a pass/fail report.
+Describe your UI tests in plain English. The agent runs them in a real browser, screenshots every step, and sends you a walkthrough video with a pass/fail report — no selectors or code needed.
 
 *Made in 🤠 Texas ❤️ [PlebLab](https://pleblab.dev)*
 
@@ -93,14 +93,40 @@ During test execution, the agent should:
 1. **Before each step**: take a screenshot → save as `step-NN-before.jpg`
 2. **After each step**: take a screenshot → save as `step-NN-after.jpg`
 3. **On failure**: take a screenshot → save as `step-NN-FAIL.jpg`
+4. **Save the URL**: after each screenshot, save the current page URL to a `.url` sidecar file
 
 Screenshots are saved to: `~/.ui-tests/runs/<slug>-<timestamp>/`
 
-After the run completes, generate a walkthrough video:
+### Saving URLs for the Video
+
+After taking each screenshot, **always save the current page URL** to a sidecar file so the walkthrough video can display a URL bar:
+
 ```bash
-ffmpeg -framerate 1 -pattern_type glob -i '~/.ui-tests/runs/<folder>/step-*.jpg' \
-  -vf "scale=1280:-2" -c:v libx264 -pix_fmt yuv420p -y output.mp4
+# After saving step-03-payment-page.jpg, save the URL:
+echo "https://example.com/checkout/payment" > ~/.ui-tests/runs/<folder>/step-03-payment-page.url
 ```
+
+The URL can be captured from:
+- `browser action=act` response → `url` field
+- `browser action=snapshot` response → `url` field  
+- `browser action=screenshot` response → check the current tab URL
+- JavaScript evaluate: `window.location.href`
+
+**The sidecar file must match the screenshot filename** (same name, `.url` extension instead of `.jpg`/`.png`).
+
+After the run completes, generate a scrolling walkthrough video:
+```bash
+bash ~/workspace/skills/ui-test/scripts/make-walkthrough.sh ~/.ui-tests/runs/<folder>
+```
+
+### Video Features
+
+- **URL bar** — dark grey bar at the top of every frame showing the page URL (read from `.url` sidecar files), with 🔒 prefix for HTTPS. Looks like a real browser chrome.
+- **1280×720 viewport** — proper widescreen; URL bar takes 40px, page content gets 680px
+- **Smooth scrolling** — tall screenshots pan top-to-bottom at 300px/s with 1s hold at each end
+- **Short screenshots** — centered on black canvas, held for 2s
+- **Step annotations** — each segment shows a text overlay (e.g. "Step 1: Click the Sign In button") pulled from the test definition, with a fade-in effect
+- **Fallback labels** — if no test definition is found, derives labels from screenshot filenames
 
 Then send the video to the chat.
 
