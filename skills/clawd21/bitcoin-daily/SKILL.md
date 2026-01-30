@@ -14,6 +14,8 @@ Daily summary of bitcoindev mailing list + Bitcoin Core commits.
 
 ## Commands
 
+### Digest
+
 Run via: `node ~/workspace/skills/bitcoin-daily/scripts/digest.js <command>`
 
 | Command | Description |
@@ -22,8 +24,21 @@ Run via: `node ~/workspace/skills/bitcoin-daily/scripts/digest.js <command>`
 | `archive` | List all archived digests |
 | `read <YYYY-MM-DD>` | Read a past summary |
 
+### Podcast
+
+Run via: `node ~/workspace/skills/bitcoin-daily/scripts/podcast.js <command>`
+
+| Command | Description |
+|---------|-------------|
+| `[YYYY-MM-DD]` | Generate podcast from archived digest |
+| `--summary <file>` | Generate from a summary file |
+| `--text "..."` | Generate from inline text |
+
+Generates a ~10-20 min AI podcast with two hosts (Alex & Maya) discussing the daily digest. Uses OpenAI TTS (`onyx` + `nova` voices) with a pop-punk intro. Output: `bitcoin-dev-archive/YYYY-MM-DD/bitcoin-daily-YYYY-MM-DD.mp3`
+
 ## Output
 
+### Text Digest
 The digest script fetches raw data. The agent then summarizes it for the user in this format:
 
 **Mailing list:** Numbered list, each item with:
@@ -34,6 +49,19 @@ The digest script fetches raw data. The agent then summarizes it for the user in
 
 Keep summaries accessible — explain like the reader is smart but not a Bitcoin Core contributor. Dry humor welcome, not forced.
 
+### Podcast Episode
+After generating the text digest, **always generate the podcast too**:
+
+1. Run `node ~/workspace/skills/bitcoin-daily/scripts/podcast.js YYYY-MM-DD`
+2. Send the text digest to the user
+3. Send the MP3 podcast as a follow-up
+
+The podcast features two hosts:
+- **Alex** (onyx voice): The grizzled bitcoiner. Deep technical knowledge, deadpan humor, ridiculous analogies.
+- **Maya** (nova voice): Wickedly smart, faster wit. Teases Alex, connects dots, makes it accessible.
+
+Their dynamic: lifelong friends, dry humor, flirty banter. Think Han Solo and Princess Leia discussing BIPs. **Never say "crypto" — bitcoin only.**
+
 ## Archive
 
 Raw data archived to `~/workspace/bitcoin-dev-archive/YYYY-MM-DD/`:
@@ -41,10 +69,17 @@ Raw data archived to `~/workspace/bitcoin-dev-archive/YYYY-MM-DD/`:
 - `mailing-list/_index.json` — thread index
 - `commits.json` — raw commit data
 - `summary.md` — generated summary
+- `podcast-script.md` — podcast dialogue script
+- `podcast-clips/` — individual TTS audio clips
+- `bitcoin-daily-YYYY-MM-DD.mp3` — final podcast episode
 
 ## Daily Cron
 
-Set up via Clawdbot cron to run every morning. The digest script fetches, archives, and outputs a summary that the agent then sends to the user.
+Set up via Clawdbot cron to run every morning. The workflow:
+1. Digest script fetches, archives, and outputs a summary
+2. Agent summarizes and sends text digest to user
+3. Podcast script generates an AI podcast episode from the digest
+4. Agent sends the MP3 podcast to user
 
 ## Sources
 
