@@ -1,0 +1,11 @@
+{
+  "owner": "akhil-naidu",
+  "slug": "dokku",
+  "displayName": "dokku",
+  "latest": {
+    "version": "0.0.1",
+    "publishedAt": 1769901387508,
+    "commit": null
+  },
+  "history": []
+}
