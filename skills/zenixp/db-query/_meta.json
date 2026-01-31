@@ -1,0 +1,11 @@
+{
+  "owner": "zenixp",
+  "slug": "db-query",
+  "displayName": "MYSQL QUERY",
+  "latest": {
+    "version": "1.0.0",
+    "publishedAt": 1769857259065,
+    "commit": null
+  },
+  "history": []
+}
