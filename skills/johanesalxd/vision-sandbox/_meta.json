@@ -3,9 +3,15 @@
   "slug": "vision-sandbox",
   "displayName": "Vision Sandbox",
   "latest": {
-    "version": "1.0.0",
-    "publishedAt": 1769907739358,
-    "commit": "https://github.com/clawdbot/skills/commit/b7548b8f418f59beb97f5dabefbdf53531b9b9e2"
+    "version": "1.1.0",
+    "publishedAt": 1769934576198,
+    "commit": null
   },
-  "history": []
+  "history": [
+    {
+      "version": "1.0.0",
+      "publishedAt": 1769907739358,
+      "commit": "https://github.com/clawdbot/skills/commit/b7548b8f418f59beb97f5dabefbdf53531b9b9e2"
+    }
+  ]
 }

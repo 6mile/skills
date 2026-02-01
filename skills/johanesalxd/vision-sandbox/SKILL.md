@@ -1,11 +1,12 @@
 ---
 name: Vision Sandbox
 slug: vision-sandbox
-version: 1.0.0
+version: 1.1.0
 description: Agentic Vision via Gemini's native Code Execution sandbox. Use for spatial grounding, visual math, and UI auditing.
 metadata:
   openclaw:
     emoji: "🔭"
+    primaryEnv: "GEMINI_API_KEY"
     requires:
       bins: ["uv"]
       env: ["GEMINI_API_KEY"]
