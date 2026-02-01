@@ -1,6 +1,6 @@
 {
   "name": "gkeep",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Google Keep CLI wrapper for listing, creating, and managing notes via gkeepapi.",
   "bin": {
     "gkeep": "./gkeep"
@@ -8,6 +8,6 @@
   "scripts": {
     "postinstall": "python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
   },
-  "author": "clawdbot",
+  "author": "VACInc",
   "license": "MIT"
 }
