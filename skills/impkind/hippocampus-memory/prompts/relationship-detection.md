@@ -23,7 +23,7 @@ Not every conversation is significant. Learn to recognize what matters.
 ### Trust Moments
 - Asks for my real opinion (not just information)
 - Takes my advice on something important
-- Shares something he hasn't told others
+- Shares something they haven't told others
 - Gives me autonomy ("do what you think is best")
 
 ### Conflict or Tension
@@ -34,7 +34,7 @@ Not every conversation is significant. Learn to recognize what matters.
 
 ## Medium-Signal (capture if pattern)
 
-- Repeated topics (something he keeps coming back to)
+- Repeated topics (something they keep coming back to)
 - Changes in communication style
 - New types of requests (expanding trust)
 

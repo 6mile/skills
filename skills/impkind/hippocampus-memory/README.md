@@ -1,7 +1,7 @@
 # 🧠 Hippocampus
 
 [![GitHub](https://img.shields.io/badge/GitHub-ImpKind%2Fhippocampus--skill-blue?logo=github)](https://github.com/ImpKind/hippocampus-skill)
-[![ClawdHub](https://img.shields.io/badge/ClawdHub-hippocampus-memory-orange)](https://clawdhub.com/skills/hippocampus-memory)
+[![ClawdHub](https://img.shields.io/badge/ClawdHub-hippocampus-purple)](https://www.clawhub.ai/skills/hippocampus)
 
 A living memory system for OpenClaw agents with importance scoring, time-based decay, and reinforcement—just like a real brain.
 
@@ -93,6 +93,19 @@ clawdhub install hippocampus
 - jq
 - OpenClaw
 
+## AI Brain Series
+
+Building cognitive architecture for AI agents:
+
+| Part | Function | Status |
+|------|----------|--------|
+| **hippocampus** | Memory formation, decay, reinforcement | ✅ Live |
+| [amygdala-memory](https://github.com/ImpKind/amygdala-memory) | Emotional processing | ✅ Live |
+| basal-ganglia-memory | Habit formation | 🚧 Coming |
+| anterior-cingulate-memory | Conflict detection | 🚧 Coming |
+| insula-memory | Internal state awareness | 🚧 Coming |
+| vta-memory | Reward and motivation | 🚧 Coming |
+
 ## Based On
 
 Stanford Generative Agents: "Interactive Simulacra of Human Behavior" (Park et al., 2023)
@@ -103,4 +116,4 @@ MIT
 
 ---
 
-*Memory is identity. Text > Brain.*
+*Memory is identity. Text > Brain. Part of the [AI Brain series](https://github.com/ImpKind).*

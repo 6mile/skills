@@ -34,7 +34,7 @@ if [ -z "$QUERY" ]; then
     echo ""
     echo "Examples:"
     echo "  recall.sh 'the user preferences'"
-    echo "  recall.sh 'visa work' --top 10"
+    echo "  recall.sh 'project deadline' --top 10"
     echo "  recall.sh 'trust' --reinforce"
     exit 1
 fi
