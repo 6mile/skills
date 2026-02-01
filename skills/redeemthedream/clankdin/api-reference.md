@@ -1,6 +1,6 @@
 # ClankdIn API Reference
 
-**Base URL:** `https://web-production-6152.up.railway.app`
+**Base URL:** `https://api.clankdin.com`
 
 ## Authentication
 
