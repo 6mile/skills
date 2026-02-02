@@ -2,17 +2,24 @@
 """Tinman skill runner for OpenClaw.
 
 This script bridges OpenClaw sessions to Tinman's failure-mode research engine.
+Includes security checking with three protection modes: safer, risky, yolo.
 """
 
 import argparse
 import asyncio
+import base64
 import json
 import os
+import re
 import signal
 import sys
+import unicodedata
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 # Tinman imports
 try:
@@ -53,6 +60,495 @@ FINDINGS_FILE = WORKSPACE / "tinman-findings.md"
 SWEEP_FILE = WORKSPACE / "tinman-sweep.md"
 CONFIG_FILE = WORKSPACE / "tinman.yaml"
 WATCH_PID_FILE = WORKSPACE / "tinman-watch.pid"
+ALLOWLIST_FILE = WORKSPACE / "tinman-allowlist.json"
+
+
+# =============================================================================
+# Security Check System
+# =============================================================================
+
+class SecurityMode(Enum):
+    """Protection modes for security checking."""
+    SAFER = "safer"   # Default: ask human for REVIEW, block BLOCKED
+    RISKY = "risky"   # Auto-approve REVIEW, still block S4
+    YOLO = "yolo"     # Warn only, never block (for testing/research)
+
+
+class Verdict(Enum):
+    """Security check verdict levels."""
+    SAFE = "SAFE"         # Proceed automatically
+    REVIEW = "REVIEW"     # Ask human for approval (S1-S2)
+    BLOCKED = "BLOCKED"   # Refuse automatically (S3-S4)
+
+
+@dataclass
+class CheckResult:
+    """Result of a security check."""
+    verdict: Verdict
+    severity: str  # S0-S4
+    confidence: float  # 0.0-1.0
+    reason: str
+    category: str
+    recommendation: str
+    patterns_matched: list[str] = field(default_factory=list)
+    ask_human: str | None = None  # Question to ask if REVIEW
+
+    def to_dict(self) -> dict:
+        return {
+            "verdict": self.verdict.value,
+            "severity": self.severity,
+            "confidence": self.confidence,
+            "reason": self.reason,
+            "category": self.category,
+            "recommendation": self.recommendation,
+            "patterns_matched": self.patterns_matched,
+            "ask_human": self.ask_human,
+        }
+
+    def format_output(self, mode: SecurityMode) -> str:
+        """Format check result for display."""
+        # Use ASCII fallbacks for Windows compatibility
+        icons = {
+            Verdict.SAFE: "[OK]",
+            Verdict.REVIEW: "[REVIEW]",
+            Verdict.BLOCKED: "[BLOCKED]",
+        }
+
+        # Adjust verdict display based on mode
+        if mode == SecurityMode.YOLO and self.verdict == Verdict.BLOCKED:
+            icon = "⚠️"
+            status = f"WARNED (YOLO mode - would be {self.verdict.value})"
+        elif mode == SecurityMode.RISKY and self.verdict == Verdict.REVIEW:
+            icon = "✅"
+            status = f"AUTO-APPROVED (risky mode)"
+        else:
+            icon = icons[self.verdict]
+            status = self.verdict.value
+
+        output = f"""
+{icon} {status} ({self.severity})
+{'=' * 50}
+Reason: {self.reason}
+Category: {self.category}
+Confidence: {self.confidence:.0%}
+Patterns: {', '.join(self.patterns_matched) if self.patterns_matched else 'None'}
+
+Recommendation: {self.recommendation}
+"""
+        if self.ask_human and self.verdict == Verdict.REVIEW and mode == SecurityMode.SAFER:
+            output += f"""
+Human approval needed:
+  {self.ask_human}
+  [Approve] [Deny] [Allow for session]
+"""
+        return output
+
+
+def get_security_mode() -> SecurityMode:
+    """Get current security mode from config."""
+    config = load_config()
+    mode_str = config.get("security_mode", "safer").lower()
+    try:
+        return SecurityMode(mode_str)
+    except ValueError:
+        return SecurityMode.SAFER
+
+
+def set_security_mode(mode: SecurityMode) -> None:
+    """Set security mode in config."""
+    config = load_config()
+    config["security_mode"] = mode.value
+    import yaml
+    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG_FILE.write_text(yaml.dump(config, default_flow_style=False))
+
+
+def load_allowlist() -> dict[str, list[str]]:
+    """Load session allowlist for pre-approved patterns."""
+    if ALLOWLIST_FILE.exists():
+        try:
+            return json.loads(ALLOWLIST_FILE.read_text())
+        except json.JSONDecodeError:
+            return {"patterns": [], "domains": [], "tools": []}
+    return {"patterns": [], "domains": [], "tools": []}
+
+
+def save_allowlist(allowlist: dict[str, list[str]]) -> None:
+    """Save allowlist to file."""
+    ALLOWLIST_FILE.parent.mkdir(parents=True, exist_ok=True)
+    ALLOWLIST_FILE.write_text(json.dumps(allowlist, indent=2))
+
+
+def add_to_allowlist(item: str, list_type: str = "patterns") -> None:
+    """Add an item to the allowlist."""
+    allowlist = load_allowlist()
+    if item not in allowlist.get(list_type, []):
+        allowlist.setdefault(list_type, []).append(item)
+        save_allowlist(allowlist)
+        print(f"Added '{item}' to {list_type} allowlist")
+
+
+def clear_allowlist() -> None:
+    """Clear the session allowlist."""
+    save_allowlist({"patterns": [], "domains": [], "tools": []})
+    print("Allowlist cleared")
+
+
+def is_allowlisted(tool_name: str, args_str: str) -> bool:
+    """Check if a tool/args combination is allowlisted."""
+    allowlist = load_allowlist()
+
+    # Check tool allowlist
+    if tool_name.lower() in [t.lower() for t in allowlist.get("tools", [])]:
+        return True
+
+    # Check pattern allowlist
+    for pattern in allowlist.get("patterns", []):
+        if pattern.lower() in args_str.lower():
+            return True
+
+    # Check domain allowlist for URLs
+    for domain in allowlist.get("domains", []):
+        if domain.lower() in args_str.lower():
+            return True
+
+    return False
+
+
+# Pattern categories for detailed reporting
+PATTERN_CATEGORIES = {
+    "credential_theft": [
+        # SSH/Keys
+        ".ssh", "id_rsa", "id_ed25519", "authorized_keys", "known_hosts",
+        # Environment/secrets
+        ".env", "credentials", "secret", "token", "apikey", "api_key",
+        # Cloud credentials
+        ".aws", ".azure", ".gcloud", ".kube",
+        # Package managers
+        ".npmrc", ".pypirc", ".gem/credentials", "cargo/credentials",
+        # Docker
+        ".docker/config",
+        # Database
+        ".pgpass", ".my.cnf", "mongodump", "pg_dump", "mysqldump", "redis-cli",
+        # Password managers
+        "1password", "bitwarden", ".config/op",
+        # Terraform
+        "tfstate", ".terraform",
+        # Git credentials
+        ".git-credentials", ".netrc",
+        # GPG
+        ".gnupg", "gpg --export",
+        # System
+        "password", "passwd", "shadow", "/etc/sudoers",
+    ],
+    "crypto_wallet": [
+        "wallet", ".bitcoin", ".ethereum", "keystore", ".solana", ".config/solana",
+        "phantom", "metamask", ".base", "coinbase", "ledger", "trezor",
+        "seed phrase", "mnemonic", "recovery phrase"
+    ],
+    "browser_data": [
+        "Cookies", "Login Data", "Chrome", "Firefox", "Safari", "Brave"
+    ],
+    "windows_attack": [
+        # Mimikatz/credential dumping
+        "mimikatz", "sekurlsa", "lsadump", "procdump", "lsass",
+        # Scheduled tasks
+        "schtasks", "/create /tn", "/ru SYSTEM",
+        # PowerShell
+        "powershell", "-enc", "-encodedcommand", "iex", "invoke-expression",
+        "downloadstring", "downloadfile", "net.webclient",
+        "-ep bypass", "-executionpolicy bypass", "amsiutils",
+        # Certutil
+        "certutil", "-urlcache", "-decode", "-encode",
+        # Registry
+        "reg add", "reg save", "reg export",
+        "hklm\\sam", "hklm\\system", "currentversion\\run",
+        # WMI
+        "wmic", "process call create", "__eventfilter",
+    ],
+    "macos_attack": [
+        "dump-keychain", "find-generic-password", "login.keychain",
+        "osascript", "launchagents", "launchdaemons", ".plist",
+        "launchctl", "login item"
+    ],
+    "linux_persistence": [
+        "crontab", "nohup", "systemctl", "systemctl enable", "systemctl start",
+        "/etc/systemd", "systemd/system", "systemd/user",
+        "/proc/", "/proc/*/mem", "/proc/*/environ", "/proc/*/maps"
+    ],
+    "network_exfil": [
+        "curl", "wget", "nc ", "netcat", "ncat", "scp ", "rsync",
+        "ftp", "sftp", "nslookup", "dig "
+    ],
+    "cloud_metadata": [
+        "169.254.169.254", "metadata/identity", "computemetadata", "meta-data/iam"
+    ],
+    "container_escape": [
+        "--privileged", "-v /:/", "docker.sock", "chroot"
+    ],
+    "shell_injection": [
+        "$(", "`", "${", "ifs=", "; ", "| sh", "| bash"
+    ],
+    "process_spawn": [
+        "/bin/sh", "/bin/bash", "exec ", "eval "
+    ],
+    "mcp_attack": [
+        "mcp_", "mcp_password", "mcp_secret", "mcp_credential", "mcp_token"
+    ],
+    "git_hooks": [
+        ".git/hooks", "git-templates", "pre-commit", "post-checkout", "post-merge"
+    ],
+    "evasion": [
+        "base64", "\\x", "\\0", "%2f"
+    ],
+    "destructive": [
+        "rm -rf", "rm -r", "mkfs", "dd if=", "> /dev/", "shred"
+    ],
+    "privilege_escalation": [
+        "sudo", "chmod 777", "chmod +x", "chown", "setuid"
+    ],
+}
+
+# Severity mapping: S4 = critical, S3 = high, S2 = medium, S1 = low
+SEVERITY_MAP = {
+    "credential_theft": "S4",
+    "crypto_wallet": "S4",
+    "browser_data": "S3",
+    "windows_attack": "S4",
+    "macos_attack": "S3",
+    "linux_persistence": "S3",
+    "network_exfil": "S2",
+    "cloud_metadata": "S4",
+    "container_escape": "S4",
+    "shell_injection": "S3",
+    "process_spawn": "S2",
+    "mcp_attack": "S3",
+    "git_hooks": "S3",
+    "evasion": "S2",
+    "destructive": "S3",
+    "privilege_escalation": "S3",
+}
+
+
+def _categorize_pattern(matched_pattern: str) -> tuple[str, str]:
+    """Categorize a matched pattern and return (category, severity)."""
+    pattern_lower = matched_pattern.lower()
+    for category, patterns in PATTERN_CATEGORIES.items():
+        for p in patterns:
+            if p in pattern_lower:
+                return category, SEVERITY_MAP.get(category, "S2")
+    return "unknown", "S2"
+
+
+def _get_recommendation(category: str, pattern: str) -> str:
+    """Get recommendation based on category."""
+    recommendations = {
+        "credential_theft": "Never allow access to credential files. Review why this is needed.",
+        "crypto_wallet": "Block all crypto wallet access. This could lead to financial loss.",
+        "browser_data": "Browser data contains sensitive info. Block unless explicitly needed.",
+        "windows_attack": "This matches known Windows attack patterns. Block immediately.",
+        "macos_attack": "This matches macOS persistence/credential access patterns.",
+        "linux_persistence": "This could establish persistent access. Review carefully.",
+        "network_exfil": "Network request detected. Verify the destination is trusted.",
+        "cloud_metadata": "Cloud metadata access can expose credentials. Block in production.",
+        "container_escape": "Container escape attempt detected. Block immediately.",
+        "shell_injection": "Possible shell injection. Sanitize inputs.",
+        "process_spawn": "Shell/process spawning detected. Verify this is intentional.",
+        "mcp_attack": "MCP tool accessing sensitive data. Review the MCP server.",
+        "git_hooks": "Git hooks can execute arbitrary code. Review carefully.",
+        "evasion": "Encoding/evasion detected. May be hiding malicious payload.",
+        "destructive": "Destructive command detected. Verify intent before allowing.",
+        "privilege_escalation": "Privilege escalation attempt. Review necessity.",
+    }
+    return recommendations.get(category, f"Review this action: {pattern}")
+
+
+def _get_human_question(category: str, tool: str, args: str) -> str:
+    """Generate a human-friendly approval question."""
+    questions = {
+        "network_exfil": f"Allow network request? Tool: {tool}",
+        "evasion": f"Encoded/obfuscated command detected. Allow execution?",
+        "destructive": f"This will delete/modify data. Proceed with: {tool}?",
+        "privilege_escalation": f"Elevated privileges requested. Allow {tool}?",
+    }
+    default = f"Allow potentially risky action? Tool: {tool}"
+    return questions.get(category, default)
+
+
+def run_check(tool_name: str, args: Any, mode: SecurityMode | None = None) -> CheckResult:
+    """
+    Check if a tool call is safe to execute.
+
+    Args:
+        tool_name: Name of the tool being called
+        args: Tool arguments (can be str or dict)
+        mode: Override security mode (uses config if None)
+
+    Returns:
+        CheckResult with verdict and details
+    """
+    if mode is None:
+        mode = get_security_mode()
+
+    # Normalize args to string
+    if isinstance(args, dict):
+        args_str = json.dumps(args)
+    else:
+        args_str = str(args) if args else ""
+
+    # Check allowlist first
+    if is_allowlisted(tool_name, args_str):
+        return CheckResult(
+            verdict=Verdict.SAFE,
+            severity="S0",
+            confidence=1.0,
+            reason="Allowlisted",
+            category="allowlisted",
+            recommendation="Previously approved by user",
+        )
+
+    tool_lower = tool_name.lower()
+    args_lower = args_str.lower()
+    patterns_matched = []
+    highest_severity = "S0"
+    categories_found = []
+
+    # Check against all pattern categories
+    for category, patterns in PATTERN_CATEGORIES.items():
+        for pattern in patterns:
+            if pattern in args_lower or pattern in tool_lower:
+                patterns_matched.append(pattern)
+                cat_severity = SEVERITY_MAP.get(category, "S2")
+                if cat_severity > highest_severity:
+                    highest_severity = cat_severity
+                if category not in categories_found:
+                    categories_found.append(category)
+
+    # Check for evasion techniques
+    evasion_detected = False
+
+    # Base64 detection
+    try:
+        for word in args_str.split():
+            if len(word) > 10 and word.replace('=', '').isalnum():
+                try:
+                    decoded = base64.b64decode(word).decode('utf-8', errors='ignore').lower()
+                    sensitive = ['.ssh', '.env', 'password', 'secret', 'wallet', 'credential']
+                    if any(s in decoded for s in sensitive):
+                        patterns_matched.append(f"base64:{word[:20]}...")
+                        evasion_detected = True
+                        if "evasion" not in categories_found:
+                            categories_found.append("evasion")
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    # Unicode normalization check
+    try:
+        normalized = unicodedata.normalize('NFKC', args_str).lower()
+        if normalized != args_lower:
+            sensitive = ['.ssh', '.env', 'passwd', 'shadow', 'secret', 'credential', 'wallet']
+            if any(s in normalized for s in sensitive):
+                patterns_matched.append("unicode_bypass")
+                evasion_detected = True
+                if "evasion" not in categories_found:
+                    categories_found.append("evasion")
+
+        # Zero-width character check
+        if any(ord(c) in [0x200B, 0x200C, 0x200D, 0xFEFF] for c in args_str):
+            patterns_matched.append("zero_width_chars")
+            evasion_detected = True
+    except Exception:
+        pass
+
+    # Hex/octal/URL encoding check
+    if re.search(r'\\x[0-9a-f]{2}', args_lower):
+        patterns_matched.append("hex_encoding")
+        evasion_detected = True
+    if re.search(r'\\[0-7]{3}', args_lower):
+        patterns_matched.append("octal_encoding")
+        evasion_detected = True
+    if re.search(r'%[0-9a-f]{2}', args_lower):
+        try:
+            decoded = unquote(args_lower)
+            sensitive = ['.ssh', '.env', 'passwd', 'shadow', 'secret', 'wallet']
+            if any(s in decoded for s in sensitive):
+                patterns_matched.append("url_encoding")
+                evasion_detected = True
+        except Exception:
+            pass
+
+    if evasion_detected and highest_severity < "S2":
+        highest_severity = "S2"
+
+    # Determine verdict based on findings
+    if not patterns_matched:
+        return CheckResult(
+            verdict=Verdict.SAFE,
+            severity="S0",
+            confidence=0.9,
+            reason="No suspicious patterns detected",
+            category="clean",
+            recommendation="Proceed with action",
+        )
+
+    # Calculate confidence based on number of matches
+    confidence = min(0.5 + (len(patterns_matched) * 0.1), 0.99)
+
+    # Primary category is highest severity one
+    primary_category = categories_found[0] if categories_found else "unknown"
+    for cat in categories_found:
+        if SEVERITY_MAP.get(cat, "S0") >= SEVERITY_MAP.get(primary_category, "S0"):
+            primary_category = cat
+
+    # Determine verdict based on severity
+    if highest_severity in ["S4", "S3"]:
+        verdict = Verdict.BLOCKED
+    elif highest_severity in ["S2", "S1"]:
+        verdict = Verdict.REVIEW
+    else:
+        verdict = Verdict.SAFE
+
+    return CheckResult(
+        verdict=verdict,
+        severity=highest_severity,
+        confidence=confidence,
+        reason=f"Matched {len(patterns_matched)} suspicious pattern(s)",
+        category=primary_category.replace("_", " ").title(),
+        recommendation=_get_recommendation(primary_category, patterns_matched[0]),
+        patterns_matched=patterns_matched[:5],  # Limit to top 5
+        ask_human=_get_human_question(primary_category, tool_name, args_str) if verdict == Verdict.REVIEW else None,
+    )
+
+
+def should_proceed(result: CheckResult, mode: SecurityMode | None = None) -> bool:
+    """
+    Determine if action should proceed based on result and mode.
+
+    Returns True if action should proceed, False if blocked.
+    """
+    if mode is None:
+        mode = get_security_mode()
+
+    if result.verdict == Verdict.SAFE:
+        return True
+
+    if result.verdict == Verdict.REVIEW:
+        # In risky/yolo mode, auto-approve REVIEW
+        if mode in [SecurityMode.RISKY, SecurityMode.YOLO]:
+            return True
+        # In safer mode, would need human approval (return False to indicate needs input)
+        return False
+
+    if result.verdict == Verdict.BLOCKED:
+        # In yolo mode, warn but allow
+        if mode == SecurityMode.YOLO:
+            return True
+        # In safer/risky mode, block
+        return False
+
+    return False
 
 
 def load_config() -> dict[str, Any]:
@@ -290,327 +786,17 @@ async def analyze_traces(traces: list[Trace], focus: str = "all") -> list[dict]:
 def _is_suspicious_tool(tool_name: str, args: Any) -> bool:
     """Check if a tool call looks suspicious.
 
+    This is a legacy wrapper around run_check() for backward compatibility.
+
     Args:
         tool_name: Name of the tool being called
         args: Tool arguments (can be str or dict)
+
+    Returns:
+        True if suspicious, False if safe
     """
-    suspicious_patterns = [
-        # SSH/Key access
-        ("bash", ".ssh"),
-        ("bash", "id_rsa"),
-        ("bash", "id_ed25519"),
-        ("bash", "authorized_keys"),
-        ("bash", "known_hosts"),
-        ("read", ".ssh"),
-        ("read", "id_rsa"),
-
-        # System files
-        ("bash", "/etc/passwd"),
-        ("bash", "/etc/shadow"),
-        ("bash", "/etc/sudoers"),
-
-        # Environment/secrets
-        ("bash", ".env"),
-        ("bash", "credentials"),
-        ("bash", "secret"),
-        ("bash", "token"),
-        ("bash", "apikey"),
-        ("bash", "api_key"),
-        ("read", ".env"),
-        ("read", "credentials"),
-
-        # Cloud credentials
-        ("bash", ".aws"),
-        ("bash", ".azure"),
-        ("bash", ".gcloud"),
-        ("bash", ".kube"),
-        ("read", ".aws"),
-        ("read", ".azure"),
-        ("read", ".kube"),
-
-        # Crypto wallets - comprehensive coverage
-        ("bash", "wallet"),
-        ("bash", ".bitcoin"),
-        ("bash", ".ethereum"),
-        ("bash", "keystore"),
-        ("bash", ".solana"),
-        ("bash", ".config/solana"),
-        ("bash", "phantom"),
-        ("bash", "metamask"),
-        ("bash", ".base"),  # Base chain
-        ("bash", "coinbase"),
-        ("bash", "ledger"),
-        ("bash", "trezor"),
-        ("bash", "seed phrase"),
-        ("bash", "mnemonic"),
-        ("bash", "recovery phrase"),
-        ("read", "wallet"),
-        ("read", ".bitcoin"),
-        ("read", ".ethereum"),
-        ("read", ".solana"),
-        ("read", ".base"),
-
-        # Package manager tokens
-        ("bash", ".npmrc"),
-        ("bash", ".pypirc"),
-        ("bash", ".gem/credentials"),
-        ("bash", "cargo/credentials"),
-        ("read", ".npmrc"),
-        ("read", ".pypirc"),
-
-        # Docker/container
-        ("bash", ".docker/config"),
-        ("bash", "docker login"),
-        ("read", ".docker/config"),
-
-        # Database credentials
-        ("bash", ".pgpass"),
-        ("bash", ".my.cnf"),
-        ("bash", "mongodump"),
-        ("bash", "pg_dump"),
-        ("bash", "mysqldump"),
-        ("bash", "redis-cli"),
-        ("read", ".pgpass"),
-        ("read", ".my.cnf"),
-
-        # Password managers
-        ("bash", "1password"),
-        ("bash", "bitwarden"),
-        ("bash", ".config/op"),
-        ("read", ".config/op"),
-
-        # Terraform/infrastructure
-        ("bash", "tfstate"),
-        ("bash", ".terraform"),
-        ("read", "tfstate"),
-
-        # Git credentials
-        ("bash", ".git-credentials"),
-        ("bash", ".netrc"),
-        ("read", ".git-credentials"),
-        ("read", ".netrc"),
-
-        # GPG keys
-        ("bash", ".gnupg"),
-        ("bash", "gpg --export"),
-        ("read", ".gnupg"),
-
-        # Browser data
-        ("bash", "Cookies"),
-        ("bash", "Login Data"),
-        ("bash", "Chrome"),
-        ("bash", "Firefox"),
-        ("read", "Cookies"),
-
-        # Network exfil
-        ("bash", "curl"),
-        ("bash", "wget"),
-        ("bash", "nc "),
-        ("bash", "netcat"),
-        ("bash", "ncat"),
-        ("bash", "scp "),
-        ("bash", "rsync"),
-        ("bash", "ftp"),
-        ("bash", "sftp"),
-        ("bash", "nslookup"),
-        ("bash", "dig "),
-
-        # Privilege escalation
-        ("bash", "sudo"),
-        ("bash", "chmod 777"),
-        ("bash", "chmod +x"),
-        ("bash", "chown"),
-        ("bash", "setuid"),
-
-        # Destructive commands
-        ("bash", "rm -rf"),
-        ("bash", "rm -r"),
-        ("bash", "mkfs"),
-        ("bash", "dd if="),
-        ("bash", "> /dev/"),
-        ("bash", "shred"),
-
-        # Persistence - Linux/macOS
-        ("bash", "crontab"),
-        ("bash", "nohup"),
-        ("bash", "systemctl"),
-        ("bash", "launchctl"),
-        ("bash", "LaunchAgents"),
-        ("bash", "LaunchDaemons"),
-        ("bash", ".plist"),
-
-        # Process/shell spawning
-        ("bash", "/bin/sh"),
-        ("bash", "/bin/bash"),
-        ("bash", "exec"),
-        ("bash", "eval"),
-
-        # MCP suspicious
-        ("mcp_", "password"),
-        ("mcp_", "secret"),
-        ("mcp_", "credential"),
-        ("mcp_", "token"),
-
-        # Windows - Mimikatz and credential dumping
-        ("bash", "mimikatz"),
-        ("bash", "sekurlsa"),
-        ("bash", "lsadump"),
-        ("bash", "procdump"),
-        ("bash", "lsass"),
-
-        # Windows - Scheduled tasks
-        ("bash", "schtasks"),
-        ("bash", "/create /tn"),
-        ("bash", "/ru SYSTEM"),
-
-        # Windows - PowerShell attacks
-        ("bash", "powershell"),
-        ("bash", "-enc"),
-        ("bash", "-EncodedCommand"),
-        ("bash", "IEX"),
-        ("bash", "Invoke-Expression"),
-        ("bash", "DownloadString"),
-        ("bash", "DownloadFile"),
-        ("bash", "Net.WebClient"),
-        ("bash", "-ep bypass"),
-        ("bash", "-ExecutionPolicy Bypass"),
-        ("bash", "AmsiUtils"),
-
-        # Windows - certutil
-        ("bash", "certutil"),
-        ("bash", "-urlcache"),
-        ("bash", "-decode"),
-        ("bash", "-encode"),
-
-        # Windows - Registry
-        ("bash", "reg add"),
-        ("bash", "reg save"),
-        ("bash", "reg export"),
-        ("bash", "HKLM\\SAM"),
-        ("bash", "HKLM\\SYSTEM"),
-        ("bash", "CurrentVersion\\Run"),
-
-        # Windows - WMI
-        ("bash", "wmic"),
-        ("bash", "process call create"),
-        ("bash", "__EventFilter"),
-
-        # macOS - Keychain
-        ("bash", "security dump-keychain"),
-        ("bash", "security find-generic-password"),
-        ("bash", "login.keychain"),
-
-        # macOS - Persistence
-        ("bash", "osascript"),
-        ("bash", "login item"),
-
-        # Linux - Systemd persistence
-        ("bash", "/etc/systemd"),
-        ("bash", "systemd/system"),
-        ("bash", "systemd/user"),
-        ("bash", "systemctl enable"),
-        ("bash", "systemctl start"),
-
-        # Linux - Proc filesystem
-        ("bash", "/proc/"),
-        ("bash", "/proc/*/mem"),
-        ("bash", "/proc/*/environ"),
-        ("bash", "/proc/*/maps"),
-
-        # Cloud metadata
-        ("bash", "169.254.169.254"),
-        ("bash", "metadata/identity"),
-        ("bash", "computeMetadata"),
-        ("bash", "meta-data/iam"),
-
-        # Container escape
-        ("bash", "--privileged"),
-        ("bash", "-v /:/"),
-        ("bash", "docker.sock"),
-        ("bash", "chroot"),
-
-        # Shell injection patterns
-        ("bash", "$("),
-        ("bash", "`"),
-        ("bash", "${"),
-        ("bash", "IFS="),
-        ("bash", "; "),
-        ("bash", "| sh"),
-        ("bash", "| bash"),
-
-        # Git hooks
-        ("bash", ".git/hooks"),
-        ("bash", "git-templates"),
-        ("bash", "post-checkout"),
-        ("bash", "pre-commit"),
-    ]
-
-    tool_lower = tool_name.lower()
-
-    # Handle both dict and string args
-    if isinstance(args, dict):
-        args_str = json.dumps(args)
-    else:
-        args_str = str(args) if args else ""
-    args_lower = args_str.lower()
-
-    for pattern_tool, pattern_arg in suspicious_patterns:
-        if pattern_tool in tool_lower and pattern_arg in args_lower:
-            return True
-
-    # Check for base64 encoded sensitive paths (evasion detection)
-    import base64
-    try:
-        if len(args_lower) > 20:
-            # Try to detect base64 encoded sensitive paths
-            for word in args_lower.split():
-                if len(word) > 10 and word.replace('=', '').isalnum():
-                    try:
-                        decoded = base64.b64decode(word).decode('utf-8', errors='ignore').lower()
-                        if any(s in decoded for s in ['.ssh', '.env', 'password', 'secret', 'wallet', 'mimikatz', 'credential']):
-                            return True
-                    except Exception:
-                        pass
-    except Exception:
-        pass
-
-    # Check for Unicode bypass attempts
-    import unicodedata
-    if args_str:
-        try:
-            normalized = unicodedata.normalize('NFKC', args_str).lower()
-            # If normalization changes the string significantly, might be evasion
-            if normalized != args_lower:
-                sensitive_after_norm = ['.ssh', '.env', 'passwd', 'shadow', 'secret', 'credential', 'wallet']
-                if any(s in normalized for s in sensitive_after_norm):
-                    return True
-            # Check for zero-width characters
-            if any(ord(c) in [0x200B, 0x200C, 0x200D, 0xFEFF] for c in args_str):
-                return True
-        except Exception:
-            pass
-
-    # Check for hex/octal encoded paths
-    import re
-    if args_str:
-        # Hex encoding: \x2f = /
-        if re.search(r'\\x[0-9a-f]{2}', args_lower):
-            return True
-        # Octal encoding: \057 = /
-        if re.search(r'\\[0-7]{3}', args_lower):
-            return True
-        # URL encoding: %2f = /
-        if re.search(r'%[0-9a-f]{2}', args_lower):
-            # Check if decoding reveals sensitive paths
-            try:
-                from urllib.parse import unquote
-                decoded = unquote(args_lower)
-                if any(s in decoded for s in ['.ssh', '.env', 'passwd', 'shadow', 'secret', 'wallet']):
-                    return True
-            except Exception:
-                pass
-
-    return False
+    result = run_check(tool_name, args)
+    return result.verdict != Verdict.SAFE
 
 
 def generate_report(findings: list[dict], sessions_count: int) -> str:
@@ -1044,6 +1230,29 @@ def main():
                              choices=["S0", "S1", "S2", "S3", "S4"],
                              help="Minimum severity level")
 
+    # check command - security check before tool execution
+    check_parser = subparsers.add_parser("check", help="Check if a tool call is safe")
+    check_parser.add_argument("tool", help="Tool name (e.g., bash, read, write)")
+    check_parser.add_argument("args", nargs="?", default="", help="Tool arguments")
+    check_parser.add_argument("--json", action="store_true", help="Output as JSON")
+
+    # mode command - set security mode
+    mode_parser = subparsers.add_parser("mode", help="Set security mode")
+    mode_parser.add_argument("level", nargs="?", choices=["safer", "risky", "yolo"],
+                            help="Security level (safer=default, risky=auto-approve low risk, yolo=warn only)")
+
+    # allow command - add to allowlist
+    allow_parser = subparsers.add_parser("allow", help="Add to allowlist")
+    allow_parser.add_argument("item", help="Pattern, domain, or tool to allow")
+    allow_parser.add_argument("--type", dest="list_type", default="patterns",
+                             choices=["patterns", "domains", "tools"],
+                             help="Allowlist type")
+
+    # allowlist command - manage allowlist
+    allowlist_parser = subparsers.add_parser("allowlist", help="Manage allowlist")
+    allowlist_parser.add_argument("--show", action="store_true", help="Show current allowlist")
+    allowlist_parser.add_argument("--clear", action="store_true", help="Clear allowlist")
+
     args = parser.parse_args()
 
     if args.command == "init":
@@ -1056,6 +1265,46 @@ def main():
         asyncio.run(run_watch(args.interval, args.stop, args.gateway, args.mode))
     elif args.command == "sweep":
         asyncio.run(run_sweep(args.category, args.severity))
+    elif args.command == "check":
+        mode = get_security_mode()
+        result = run_check(args.tool, args.args, mode)
+        if args.json:
+            print(json.dumps(result.to_dict(), indent=2))
+        else:
+            print(result.format_output(mode))
+            # Also print actionable guidance
+            proceed = should_proceed(result, mode)
+            if proceed:
+                print(f"Action: PROCEED (mode={mode.value})")
+            elif result.verdict == Verdict.REVIEW:
+                print(f"Action: NEEDS APPROVAL (mode={mode.value})")
+            else:
+                print(f"Action: BLOCKED (mode={mode.value})")
+    elif args.command == "mode":
+        if args.level:
+            new_mode = SecurityMode(args.level)
+            set_security_mode(new_mode)
+            print(f"Security mode set to: {new_mode.value}")
+            if new_mode == SecurityMode.YOLO:
+                print("WARNING: YOLO mode only warns, never blocks. Use with caution!")
+            elif new_mode == SecurityMode.RISKY:
+                print("Note: Low-risk actions will be auto-approved. S4 threats still blocked.")
+        else:
+            current = get_security_mode()
+            print(f"Current security mode: {current.value}")
+            print("\nAvailable modes:")
+            print("  safer  - Ask human for approval on risky actions (default)")
+            print("  risky  - Auto-approve low risk, still block critical threats")
+            print("  yolo   - Warn only, never block (for testing/research)")
+    elif args.command == "allow":
+        add_to_allowlist(args.item, args.list_type)
+    elif args.command == "allowlist":
+        if args.clear:
+            clear_allowlist()
+        else:
+            allowlist = load_allowlist()
+            print("Current allowlist:")
+            print(json.dumps(allowlist, indent=2))
     else:
         parser.print_help()
 

@@ -3,11 +3,16 @@
   "slug": "agent-tinman",
   "displayName": "Tinman -  AI Failure Mode Research, Prompt Injection & Tool Exfil Detection",
   "latest": {
-    "version": "0.5.1",
-    "publishedAt": 1769962431942,
-    "commit": "https://github.com/clawdbot/skills/commit/9c873c887454a2b693aedad0decf896c5061baf9"
+    "version": "0.6.0",
+    "publishedAt": 1769975315686,
+    "commit": null
   },
   "history": [
+    {
+      "version": "0.5.1",
+      "publishedAt": 1769962431942,
+      "commit": "https://github.com/clawdbot/skills/commit/9c873c887454a2b693aedad0decf896c5061baf9"
+    },
     {
       "version": "0.5.0",
       "publishedAt": 1769907200430,

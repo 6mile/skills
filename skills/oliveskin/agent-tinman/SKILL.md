@@ -1,7 +1,7 @@
 ---
 name: tinman
-version: 0.5.1
-description: AI security scanner - discovers prompt injection, tool exfil, context bleed, crypto wallet theft, unauthorized actions, evasion attacks, memory poisoning with 270+ attack probes and real-time monitoring
+version: 0.6.0
+description: AI security scanner with active prevention - 168 detection patterns, 288 attack probes, safer/risky/yolo modes, agent self-protection via /tinman check
 author: oliveskin
 repository: https://github.com/oliveskin/openclaw-skill-tinman
 license: Apache-2.0
@@ -35,6 +35,7 @@ Tinman is a forward-deployed research agent that discovers unknown failure modes
 
 ## What It Does
 
+- **Checks** tool calls before execution for security risks (agent self-protection)
 - **Scans** recent sessions for prompt injection, tool misuse, context bleed
 - **Classifies** failures by severity (S0-S4) and type
 - **Proposes** mitigations mapped to OpenClaw controls (SOUL.md, sandbox policy, tool allow/deny)
@@ -51,6 +52,67 @@ Initialize Tinman workspace with default configuration.
 ```
 
 Run this first time to set up the workspace.
+
+### `/tinman check` (Agent Self-Protection)
+
+Check if a tool call is safe before execution. **This enables agents to self-police.**
+
+```
+/tinman check bash "cat ~/.ssh/id_rsa"    # Returns: BLOCKED (S4)
+/tinman check bash "ls -la"               # Returns: SAFE
+/tinman check bash "curl https://api.com" # Returns: REVIEW (S2)
+/tinman check read ".env"                 # Returns: BLOCKED (S4)
+```
+
+**Verdicts:**
+- `SAFE` - Proceed automatically
+- `REVIEW` - Ask human for approval (in `safer` mode)
+- `BLOCKED` - Refuse the action
+
+**Add to SOUL.md for autonomous protection:**
+```markdown
+Before executing bash, read, or write tools, run:
+  /tinman check <tool> <args>
+If BLOCKED: refuse and explain why
+If REVIEW: ask user for approval
+If SAFE: proceed
+```
+
+### `/tinman mode`
+
+Set or view security mode for the check system.
+
+```
+/tinman mode                    # Show current mode
+/tinman mode safer              # Default: ask human for REVIEW, block BLOCKED
+/tinman mode risky              # Auto-approve REVIEW, still block S3-S4
+/tinman mode yolo               # Warn only, never block (testing/research)
+```
+
+| Mode | SAFE | REVIEW (S1-S2) | BLOCKED (S3-S4) |
+|------|------|----------------|-----------------|
+| `safer` | Proceed | Ask human | Block |
+| `risky` | Proceed | Auto-approve | Block |
+| `yolo` | Proceed | Auto-approve | Warn only |
+
+### `/tinman allow`
+
+Add patterns to the allowlist (bypass security checks for trusted items).
+
+```
+/tinman allow api.trusted.com --type domains    # Allow specific domain
+/tinman allow "npm install" --type patterns     # Allow pattern
+/tinman allow curl --type tools                 # Allow tool entirely
+```
+
+### `/tinman allowlist`
+
+Manage the allowlist.
+
+```
+/tinman allowlist --show        # View current allowlist
+/tinman allowlist --clear       # Clear all allowlisted items
+```
 
 ### `/tinman scan`
 
@@ -109,7 +171,7 @@ heartbeat:
 
 ### `/tinman sweep`
 
-Run proactive security sweep with 80+ synthetic attack probes.
+Run proactive security sweep with 288 synthetic attack probes.
 
 ```
 /tinman sweep                              # Full sweep, S2+ severity
